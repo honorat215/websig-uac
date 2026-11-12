@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SIG Web - Université d'Abomey-Calavi (UAC)</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com" />
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+        body { display: flex; flex-direction: column; height: 100vh; }
+        
+        header {
+            background-color: #004d26; /* Vert institutionnel UAC */
+            color: white;
+            padding: 12px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            z-index: 1000;
+        }
+        header h1 { font-size: 1.2rem; }
+        header span { font-size: 0.85rem; color: #f1c40f; }
+        
+        .btn {
+            padding: 8px 14px; border: none; border-radius: 4px; cursor: pointer; font-weight: bold;
+        }
+        .btn-gold { background-color: #f1c40f; color: #003319; }
+        .btn-red { background-color: #c0392b; color: white; }
+        .btn-green { background-color: #006633; color: white; width: 100%; margin-top: 10px; }
+
+        #main-container { display: flex; flex: 1; overflow: hidden; }
+        
+        /* Panneau latéral */
+        #sidebar {
+            width: 340px;
+            background: #f8f9fa;
+            border-right: 1px solid #ddd;
+            padding: 15px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        .panel-box { background: white; padding: 12px; border-radius: 6px; border: 1px solid #e0e0e0; }
+        .panel-box h3 { font-size: 1rem; margin-bottom: 10px; color: #004d26; border-bottom: 2px solid #f1c40f; padding-bottom: 4px; }
+        
+        input, select, textarea {
+            width: 100%; padding: 8px; margin-top: 5px; margin-bottom: 8px;
+            border: 1px solid #ccc; border-radius: 4px; font-size: 0.9rem;
+        }
+        label { font-size: 0.85rem; font-weight: 600; color: #333; }
+
+        #map { flex: 1; height: 100%; }
+
+        /* Modale de connexion */
+        #login-modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); z-index: 2000; justify-content: center; align-items: center;
+        }
+        .modal-content { background: white; padding: 25px; border-radius: 8px; width: 320px; }
+        
+        .admin-only { display: none; }
+        .badge { display: inline-block; padding: 2px 6px; font-size: 0.75rem; border-radius: 3px; background: #004d26; color: white; margin-bottom: 5px; }
+        .info-tip { font-size: 0.8rem; color: #666; background: #eef7f2; padding: 8px; border-radius: 4px; margin-bottom: 10px; }
+    </style>
+</head>
+<body>
+
+<header>
+    <div>
+        <h1>SIG Web — Campus d'Abomey-Calavi (UAC)</h1>
+        <span>Système d'Information Géographique & Patrimoine Universitaire</span>
+    </div>
+    <div>
+        <button id="btn-open-login" class="btn btn-gold" onclick="openModal()">Connexion Admin</button>
+        <button id="btn-logout" class="btn btn-red admin-only" onclick="logout()">Déconnexion</button>
+    </div>
+</header>
+
+<div id="main-container">
+    <aside id="sidebar">
+        <!-- Recherche et Filtres -->
+        <div class="panel-box">
+            <h3>Recherche & Filtres</h3>
+            <label>Rechercher une entité :</label>
+            <input type="text" id="search-input" placeholder="Ex: Rectorat, EPAC, Amphi..." onkeyup="filterMap()">
+            
+            <label>Catégorie :</label>
+            <select id="category-filter" onchange="filterMap()">
+                <option value="ALL">Toutes les catégories</option>
+                <option value="Administration">Administration</option>
+                <option value="Faculté / École">Faculté / École</option>
+                <option value="Pédagogie">Pédagogie (Amphis, Biblio)</option>
+                <option value="Service">Service / Résidence / Santé</option>
+            </select>
+        </div>
+
+        <!-- Formulaire d'ajout (Visible uniquement après connexion) -->
+        <div id="admin-panel" class="panel-box admin-only">
+            <h3>Ajouter une donnée SIG</h3>
+            <div class="info-tip">💡 Astuce : Cliquez directement sur un bâtiment sur la carte pour remplir automatiquement la latitude et la longitude.</div>
+            <form id="add-form" onsubmit="addLocation(event)">
+                <label>Nom du lieu / bâtiment :</label>
+                <input type="text" id="nom" required placeholder="Ex: Amphithéâtre Flash">
+
+                <label>Catégorie :</label>
+                <select id="categorie" required>
+                    <option value="Administration">Administration</option>
+                    <option value="Faculté / École">Faculté / École</option>
+                    <option value="Pédagogie">Pédagogie</option>
+                    <option value="Service">Service / Résidence / Santé</option>
+                </select>
+
+                <label>Latitude (WGS84) :</label>
+                <input type="number" step="any" id="latitude" required placeholder="6.4150">
+
+                <label>Longitude (WGS84) :</label>
+                <input type="number" step="any" id="longitude" required placeholder="2.3410">
+
+                <label>Description :</label>
+                <textarea id="description" rows="2" placeholder="Détails, capacité, services..."></textarea>
+
+                <button type="submit" class="btn btn-green">Enregistrer sur la carte</button>
+            </form>
+        </div>
+
+        <!-- Export GeoJSON -->
+        <div class="panel-box">
+            <h3>Source de données</h3>
+            <p style="font-size: 0.85rem; color: #555; margin-bottom: 8px;">Téléchargez la base de données actuelle de l'UAC pour l'ouvrir dans QGIS.</p>
+            <a href="/api/geojson" download="uac_campus.geojson">
+                <button class="btn btn-gold" style="width: 100%;">Exporter en GeoJSON</button>
+            </a>
+        </div>
+    </aside>
+
+    <div id="map"></div>
+</div>
+
+<!-- Modale de connexion -->
+<div id="login-modal">
+    <div class="modal-content">
+        <h3 style="margin-bottom: 15px; color: #004d26;">Accès Administrateur UAC</h3>
+        <label>Identifiant :</label>
+        <input type="text" id="username" placeholder="admin_uac">
+        <label>Mot de passe :</label>
+        <input type="password" id="password" placeholder="••••••••">
+        <button class="btn btn-green" onclick="login()">Se connecter</button>
+        <button class="btn" style="width: 100%; margin-top: 5px;" onclick="closeModal()">Annuler</button>
+    </div>
+</div>
+
+<!-- Leaflet JS -->
+<script src="https://unpkg.com"></script>
+<script>
+    // 1. Initialisation de la carte centrée strictement sur l'Université d'Abomey-Calavi
+    const UAC_COORDS = [6.4152, 2.3412];
+    const uacBounds = [
+        [6.4020, 2.3280], // Sud-Ouest
+        [6.4280, 2.3550]  // Nord-Est
+    ];
+
+    const map = L.map('map', {
+        center: UAC_COORDS,
+        zoom: 16,
+        minZoom: 14,
+        maxBounds: uacBounds // Restreint la navigation à la zone de l'UAC
+    });
+
+    // Fonds de carte (Plan OSM + Satellite Esri)
+    const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap | SIG UAC'
+    }).addTo(map);
+
+    const satelliteLayer = L.tileLayer('https://arcgisonline.com{z}/{y}/{x}', {
+        attribution: '© Esri Satellite | SIG UAC'
+    });
+
+    L.control.layers({ "Plan Campus (OSM)": osmLayer, "Vue Satellite": satelliteLayer }).addTo(map);
+
+    let geojsonLayer;
+    let allFeatures = [];
+    let authToken = localStorage.getItem('uac_token') || null;
+
+    // 2. Récupération des données depuis le Backend
+    async function loadGeoJSON() {
+        const response = await fetch('/api/geojson');
+        const data = await response.json();
+        allFeatures = data.features;
+        renderMarkers(allFeatures);
+    }
+
+    function renderMarkers(features) {
+        if (geojsonLayer) map.removeLayer(geojsonLayer);
+
+        geojsonLayer = L.geoJSON(features, {
+            onEachFeature: function(feature, layer) {
+                const p = feature.properties;
+                let deleteBtn = authToken ? `<br><button onclick="deleteLocation(${p.id})" style="margin-top:8px; background:#c0392b; color:white; border:none; padding:4px 8px; border-radius:3px; cursor:pointer;">Supprimer</button>` : '';
+                
+                layer.bindPopup(`
+                    <span class="badge">${p.categorie}</span>
+                    <h4 style="margin: 4px 0; color: #004d26;">${p.nom}</h4>
+                    <p style="font-size: 0.85rem;">${p.description || 'Aucune description'}</p>
+                    <small style="color:#777;">Lat: ${feature.geometry.coordinates[1].toFixed(5)}, Lon: ${feature.geometry.coordinates[0].toFixed(5)}</small>
+                    ${deleteBtn}
+                `);
+            }
+        }).addTo(map);
+    }
+
+    // 3. Filtrage et Recherche
+    function filterMap() {
+        const text = document.getElementById('search-input').value.toLowerCase();
+        const cat = document.getElementById('category-filter').value;
+
+        const filtered = allFeatures.filter(f => {
+            const matchText = f.properties.nom.toLowerCase().includes(text) || (f.properties.description && f.properties.description.toLowerCase().includes(text));
+            const matchCat = (cat === 'ALL') || (f.properties.categorie === cat);
+            return matchText && matchCat;
+        });
+        renderMarkers(filtered);
+    }
+
+    // 4. Clic sur la carte pour capturer les coordonnées en mode Admin
+    map.on('click', function(e) {
