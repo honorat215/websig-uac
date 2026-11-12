@@ -1,0 +1,14 @@
+{
+  "name": "websig-uac",
+  "version": "1.0.0",
+  "description": "SIG Web de l'Université d'Abomey-Calavi",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "body-parser": "^1.20.2",
+    "express": "^4.18.2",
+    "sqlite3": "^5.1.7"
+  }
+}
